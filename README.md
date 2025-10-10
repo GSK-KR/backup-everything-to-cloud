@@ -1,130 +1,132 @@
-# Backup Everything to Google Drive & AWS S3
+# Backup Everything to Cloud
 
-Node.js로 작성된 자동 백업 시스템입니다. 지정한 폴더와 PostgreSQL 데이터베이스를 tar.gz로 압축하여 Google Drive 또는 AWS S3에 업로드하고, 오래된 백업을 자동으로 정리합니다.
+[한국어 문서](README.ko.md)
 
-## 주요 기능
+Automated backup system built with Node.js that compresses specified folders and PostgreSQL databases into tar.gz archives and uploads them to cloud storage providers (Google Drive or AWS S3), with automatic cleanup of old backups.
 
-- ✅ 여러 폴더를 tar.gz로 압축하여 백업
-- ✅ PostgreSQL 데이터베이스 덤프 백업 (pg_dump -Fc)
-- ✅ **다중 업로더 지원**: Google Drive, AWS S3 (rclone 또는 AWS SDK)
-- ✅ **선택적 업로드**: 원하는 저장소만 선택하여 업로드 가능
-- ✅ 개인 Gmail 계정 지원 (OAuth 2.0)
-- ✅ 보관 기간 설정 (N일 이상 오래된 백업 자동 삭제)
-- ✅ 업로드 실패 시 3회 재시도 (exponential backoff)
-- ✅ 업로드 실패 시 로컬 백업 보관
-- ✅ PM2 cron 스케줄링 지원
+## Key Features
 
-## 사전 요구사항
+- ✅ Compress multiple folders into tar.gz archives for backup
+- ✅ PostgreSQL database dump backup (pg_dump -Fc)
+- ✅ **Multi-uploader support**: Google Drive, AWS S3 (rclone or AWS SDK)
+- ✅ **Selective upload**: Choose which storage provider(s) to use
+- ✅ Personal Gmail account support (OAuth 2.0)
+- ✅ Retention policy (automatically delete backups older than N days)
+- ✅ 3 retries on upload failure (exponential backoff)
+- ✅ Keep local backup on upload failure
+- ✅ PM2 cron scheduling support
+
+## Prerequisites
 
 - Node.js >= 18.0.0
-- PostgreSQL 클라이언트 도구 (pg_dump, psql)
-- **업로더별 요구사항**:
+- PostgreSQL client tools (pg_dump, psql)
+- **Uploader-specific requirements**:
   - Google Drive: rclone
   - S3 (rclone): rclone
-  - S3 (SDK): AWS SDK (자동 설치됨)
+  - S3 (SDK): AWS SDK (auto-installed)
 
-## 설치
+## Installation
 
 ```bash
-# 1. 저장소 클론
+# 1. Clone repository
 git clone <repository-url>
-cd backup-everything-to-google-drive
+cd backup-everything-to-cloud
 
-# 2. 의존성 설치
+# 2. Install dependencies
 npm install
 
-# 3. rclone 설치 (Google Drive 또는 S3 rclone 방식 사용 시)
+# 3. Install rclone (for Google Drive or S3 rclone method)
 # macOS
 brew install rclone
 
 # Linux
 curl https://rclone.org/install.sh | sudo bash
 
-# 4. 설정 파일 복사
+# 4. Copy configuration files
 cp .backup.example .backup
 cp .config.example .config
 ```
 
-## 설정
+## Configuration
 
-### 1. 업로더 설정
+### 1. Uploader Setup
 
-#### 옵션 A: Google Drive (rclone)
+#### Option A: Google Drive (rclone)
 
 ```bash
 rclone config
 ```
 
-설정 과정:
+Setup process:
 1. **n** (new remote)
-2. **name**: `gdrive` 입력
-3. **Storage**: `drive` (Google Drive) 선택
-4. **Client ID/Secret**: 엔터 (기본값 사용)
-5. **Scope**: `1` (full access) 선택
-6. **Root folder**: 엔터 (기본값)
+2. **name**: Enter `gdrive`
+3. **Storage**: Select `drive` (Google Drive)
+4. **Client ID/Secret**: Press Enter (use defaults)
+5. **Scope**: Select `1` (full access)
+6. **Root folder**: Press Enter (default)
 7. **Service Account**: `n`
-8. **Auto config**: `y` → 브라우저 열림 → Google 로그인 → 권한 승인
+8. **Auto config**: `y` → Browser opens → Google login → Grant permissions
 9. **Team Drive**: `n`
-10. **y** (확인)
-11. **q** (종료)
+10. **y** (confirm)
+11. **q** (quit)
 
-#### 옵션 B: AWS S3 (rclone)
+#### Option B: AWS S3 (rclone)
 
 ```bash
 rclone config
 ```
 
-설정 과정:
+Setup process:
 1. **n** (new remote)
-2. **name**: `s3` 입력
-3. **Storage**: `s3` (Amazon S3) 선택
-4. **Provider**: `AWS` 선택
-5. **Credentials**: `1` (Enter AWS credentials) 또는 `2` (환경변수 사용)
-6. **Access Key ID**: 입력
-7. **Secret Access Key**: 입력
-8. **Region**: `us-east-1` 또는 원하는 리전 입력
-9. **y** (확인)
-10. **q** (종료)
+2. **name**: Enter `s3`
+3. **Storage**: Select `s3` (Amazon S3)
+4. **Provider**: Select `AWS`
+5. **Credentials**: `1` (Enter AWS credentials) or `2` (use environment variables)
+6. **Access Key ID**: Enter your key
+7. **Secret Access Key**: Enter your secret
+8. **Region**: Enter `us-east-1` or your desired region
+9. **y** (confirm)
+10. **q** (quit)
 
-**또는 환경변수 사용** (`.env` 파일):
+**Or use environment variables** (`.env` file):
 ```bash
 AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
 ```
 
-#### 옵션 C: AWS S3 (AWS SDK)
+#### Option C: AWS S3 (AWS SDK)
 
-AWS SDK는 별도 rclone 설정 없이 사용 가능합니다.
+AWS SDK can be used without rclone configuration.
 
-**인증 방식** (우선순위 순):
-1. 환경변수 (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
-2. `~/.aws/credentials` 파일
-3. IAM Role (EC2/ECS에서 실행 시)
+**Authentication methods** (in priority order):
+1. Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+2. `~/.aws/credentials` file
+3. IAM Role (when running on EC2/ECS)
 
-**AWS CLI 설정** (옵션 2번 방식):
+**AWS CLI setup** (for option 2):
 ```bash
 aws configure
-# Access Key ID: [입력]
-# Secret Access Key: [입력]
+# Access Key ID: [enter]
+# Secret Access Key: [enter]
 # Region: us-east-1
 # Output format: json
 ```
 
-### 2. .backup 파일 설정
+### 2. .backup File Configuration
 
-백업할 폴더와 PostgreSQL 연결 정보를 한 줄에 하나씩 입력합니다.
+Add folder paths and PostgreSQL connection strings, one per line.
 
 ```
-# 폴더 경로 (절대 경로)
+# Folder paths (absolute paths)
 /home/user/important-data
 /var/www/project1
 
-# PostgreSQL 연결 문자열
+# PostgreSQL connection strings
 postgres://username:password@localhost:5432/mydb
 postgres://user2:pass2@192.168.1.10:5432/production_db
 ```
 
-### 3. .config 파일 설정
+### 3. .config File Configuration
 
 ```json
 {
@@ -148,84 +150,84 @@ postgres://user2:pass2@192.168.1.10:5432/production_db
 }
 ```
 
-#### 업로더 타입 설명
+#### Uploader Types
 
-| 타입 | 설명 | 장점 | 단점 |
-|------|------|------|------|
-| `gdrive` | Google Drive (rclone) | 개인 Gmail 계정 지원, 무료 15GB | rclone 설정 필요 |
-| `s3-rclone` | AWS S3 (rclone) | 일관된 인터페이스 | rclone 설정 필요 |
-| `s3-sdk` | AWS S3 (AWS SDK) | rclone 불필요, 네이티브 | AWS 의존성 추가 |
+| Type | Description | Pros | Cons |
+|------|-------------|------|------|
+| `gdrive` | Google Drive (rclone) | Personal Gmail support, 15GB free | Requires rclone setup |
+| `s3-rclone` | AWS S3 (rclone) | Consistent interface | Requires rclone setup |
+| `s3-sdk` | AWS S3 (AWS SDK) | No rclone needed, native | AWS dependency |
 
-#### 업로더 설정 필드
+#### Uploader Configuration Fields
 
-**공통 필드:**
-- `type`: 업로더 타입 (필수)
-- `enabled`: 활성화 여부 (기본값: true)
+**Common fields:**
+- `type`: Uploader type (required)
+- `enabled`: Enable/disable (default: true)
 
-**gdrive 전용:**
-- `remote_name`: rclone 리모트 이름 (기본값: `gdrive`)
-- `folder_path`: Google Drive 폴더 경로 (예: `backups`)
+**gdrive specific:**
+- `remote_name`: rclone remote name (default: `gdrive`)
+- `folder_path`: Google Drive folder path (e.g., `backups`)
 
-**s3-rclone 전용:**
-- `remote_name`: rclone 리모트 이름 (기본값: `s3`)
-- `bucket`: S3 버킷 이름 (필수)
-- `prefix`: S3 객체 키 프리픽스 (예: `backups/`)
-- `region`: AWS 리전 (기본값: `us-east-1`)
-- `storage_class`: 스토리지 클래스 (기본값: `STANDARD`)
+**s3-rclone specific:**
+- `remote_name`: rclone remote name (default: `s3`)
+- `bucket`: S3 bucket name (required)
+- `prefix`: S3 object key prefix (e.g., `backups/`)
+- `region`: AWS region (default: `us-east-1`)
+- `storage_class`: Storage class (default: `STANDARD`)
 
-**s3-sdk 전용:**
-- `bucket`: S3 버킷 이름 (필수)
-- `prefix`: S3 객체 키 프리픽스 (예: `backups/`)
-- `region`: AWS 리전 (기본값: `us-east-1`)
-- `storage_class`: 스토리지 클래스 (기본값: `STANDARD`)
+**s3-sdk specific:**
+- `bucket`: S3 bucket name (required)
+- `prefix`: S3 object key prefix (e.g., `backups/`)
+- `region`: AWS region (default: `us-east-1`)
+- `storage_class`: Storage class (default: `STANDARD`)
 
-#### S3 Storage Class 선택 가이드
+#### S3 Storage Class Guide
 
-| 클래스 | 용도 | 비용 | 검색 속도 |
-|--------|------|------|-----------|
-| `STANDARD` | 자주 접근하는 데이터 | 높음 | 즉시 |
-| `STANDARD_IA` | 월 1회 미만 접근 | 중간 | 즉시 |
-| `GLACIER` | 아카이브 (연 1-2회) | 낮음 | 분~시간 |
-| `INTELLIGENT_TIERING` | 자동 최적화 | 자동 | 즉시 |
+| Class | Use Case | Cost | Retrieval Speed |
+|-------|----------|------|-----------------|
+| `STANDARD` | Frequently accessed data | High | Immediate |
+| `STANDARD_IA` | <1x/month access | Medium | Immediate |
+| `GLACIER` | Archive (1-2x/year) | Low | Minutes to hours |
+| `INTELLIGENT_TIERING` | Auto-optimization | Auto | Immediate |
 
-**백업 추천**: `STANDARD_IA` (비용 효율적, 빠른 복구)
+**Recommended for backups**: `STANDARD_IA` (cost-effective, fast recovery)
 
-## 사용법
+## Usage
 
-### 수동 실행
+### Manual Execution
 
 ```bash
 npm start
 ```
 
-### PM2로 자동 실행 (권장)
+### Automated with PM2 (Recommended)
 
 ```bash
-# PM2 설치 (전역)
+# Install PM2 (globally)
 npm install -g pm2
 
-# PM2에 등록 및 cron 스케줄 시작
+# Register with PM2 and start cron schedule
 npm run pm2:start
 
-# 상태 확인
+# Check status
 npm run pm2:status
 
-# 로그 확인
+# View logs
 npm run pm2:logs
 
-# PM2 재시작
+# Restart PM2
 npm run pm2:restart
 
-# PM2 중지
+# Stop PM2
 npm run pm2:stop
 
-# PM2에서 제거
+# Remove from PM2
 npm run pm2:delete
 ```
 
-## 사용 예시
+## Usage Examples
 
-### 예시 1: Google Drive만 사용
+### Example 1: Google Drive Only
 
 ```json
 {
@@ -241,7 +243,7 @@ npm run pm2:delete
 }
 ```
 
-### 예시 2: S3만 사용 (AWS SDK)
+### Example 2: S3 Only (AWS SDK)
 
 ```json
 {
@@ -260,7 +262,7 @@ npm run pm2:delete
 }
 ```
 
-### 예시 3: Google Drive + S3 동시 업로드
+### Example 3: Google Drive + S3 Simultaneous Upload
 
 ```json
 {
@@ -284,7 +286,7 @@ npm run pm2:delete
 }
 ```
 
-### 예시 4: S3 rclone과 SDK 동시 사용
+### Example 4: Multiple S3 (rclone + SDK)
 
 ```json
 {
@@ -311,96 +313,96 @@ npm run pm2:delete
 }
 ```
 
-## 프로젝트 구조
+## Project Structure
 
 ```
 .
 ├── src/
-│   ├── backup.js           # 메인 백업 오케스트레이션
-│   ├── config.js           # 설정 관리 클래스
-│   ├── uploaders/          # 업로더 모듈
-│   │   ├── base.js         # 공통 인터페이스
-│   │   ├── factory.js      # 업로더 팩토리
-│   │   ├── gdrive.js       # Google Drive 업로더
-│   │   ├── s3-rclone.js    # S3 rclone 업로더
-│   │   └── s3-sdk.js       # S3 SDK 업로더
-│   ├── postgres.js         # PostgreSQL 백업 모듈
-│   ├── compress.js         # 압축 유틸리티
-│   └── utils.js            # 공통 유틸리티 함수
-├── .backup                 # 백업 대상 정의 파일 (gitignore)
-├── .config                 # 앱 설정 파일 (gitignore)
-├── package.json            # NPM 패키지 정의 및 스크립트
-└── README.md               # 이 파일
+│   ├── backup.js           # Main backup orchestration
+│   ├── config.js           # Configuration management
+│   ├── uploaders/          # Uploader modules
+│   │   ├── base.js         # Common interface
+│   │   ├── factory.js      # Uploader factory
+│   │   ├── gdrive.js       # Google Drive uploader
+│   │   ├── s3-rclone.js    # S3 rclone uploader
+│   │   └── s3-sdk.js       # S3 SDK uploader
+│   ├── postgres.js         # PostgreSQL backup module
+│   ├── compress.js         # Compression utilities
+│   └── utils.js            # Common utility functions
+├── .backup                 # Backup targets definition (gitignored)
+├── .config                 # App configuration (gitignored)
+├── package.json            # NPM package definition
+└── README.md               # This file
 ```
 
-## 작동 방식
+## How It Works
 
-1. **설정 로드**: `.backup`, `.config` 파일 읽기
-2. **업로더 초기화**: 활성화된 모든 업로더 초기화 및 연결 테스트
-3. **폴더 백업**: 각 폴더를 tar.gz로 압축
-4. **데이터베이스 백업**: pg_dump로 PostgreSQL 덤프 생성 후 압축
-5. **업로드**: 모든 활성화된 업로더에 백업 파일 업로드
-6. **오래된 백업 정리**: retention_days 기준으로 각 저장소에서 오래된 파일 삭제
-7. **로컬 파일 정리**: 업로드 성공 시 로컬 백업 파일 삭제
+1. **Load Configuration**: Read `.backup` and `.config` files
+2. **Initialize Uploaders**: Initialize all enabled uploaders and test connections
+3. **Folder Backup**: Compress each folder into tar.gz
+4. **Database Backup**: Create PostgreSQL dumps with pg_dump, then compress
+5. **Upload**: Upload backup files to all enabled uploaders
+6. **Cleanup Old Backups**: Delete backups older than retention_days from each storage
+7. **Local Cleanup**: Delete local backup files after successful upload
 
-## 트러블슈팅
+## Troubleshooting
 
-### rclone 리모트가 설정되지 않았습니다
+### rclone remote not configured
 
 ```bash
-# rclone 리모트 목록 확인
+# Check rclone remotes
 rclone listremotes
 
-# 'gdrive:' 또는 's3:'가 없으면 rclone config로 설정
+# If 'gdrive:' or 's3:' is missing, configure with rclone config
 rclone config
 ```
 
-### Google Drive 연결 테스트
+### Google Drive Connection Test
 
 ```bash
-# Google Drive 용량 확인
+# Check Google Drive capacity
 rclone about gdrive:
 
-# 백업 폴더 확인
+# Check backup folder
 rclone lsjson gdrive:backups
 ```
 
-### S3 연결 테스트
+### S3 Connection Test
 
 ```bash
-# rclone 방식
+# rclone method
 rclone lsd s3:my-bucket
 
-# AWS CLI 방식
+# AWS CLI method
 aws s3 ls s3://my-bucket/backups/
 ```
 
-### PostgreSQL 버전 불일치 오류
+### PostgreSQL Version Mismatch
 
-pg_dump와 PostgreSQL 서버 버전이 다를 경우, `--no-sync` 옵션이 자동으로 추가됩니다.
+If pg_dump and PostgreSQL server versions differ, `--no-sync` option is automatically added.
 
-### AWS credentials 오류
+### AWS Credentials Error
 
-**환경변수 확인**:
+**Check environment variables**:
 ```bash
 echo $AWS_ACCESS_KEY_ID
 echo $AWS_SECRET_ACCESS_KEY
 ```
 
-**AWS CLI credentials 확인**:
+**Check AWS CLI credentials**:
 ```bash
 cat ~/.aws/credentials
 ```
 
-**IAM Role 확인** (EC2):
+**Check IAM Role** (EC2):
 ```bash
 curl http://169.254.169.254/latest/meta-data/iam/security-credentials/
 ```
 
-## 라이선스
+## License
 
 MIT
 
-## 기여
+## Contributing
 
-이슈 및 PR을 환영합니다!
+Issues and PRs are welcome!

@@ -1,21 +1,23 @@
 {
-  "name": "backup-everything-to-google-drive",
+  "name": "backup-everything-to-cloud",
   "version": "1.0.0",
-  "description": "Automated backup system for folders and PostgreSQL databases to Google Drive",
+  "description": "Automated backup system for folders and PostgreSQL databases to cloud storage (Google Drive, AWS S3)",
   "main": "src/backup.js",
   "scripts": {
     "start": "node src/backup.js",
-    "pm2:start": "node -e \"const config=require('./.config');const schedule=config.schedule||'0 2 * * *';require('child_process').execSync('pm2 start src/backup.js --name backup-gdrive --cron-restart \\\"'+schedule+'\\\"',{stdio:'inherit'})\"",
-    "pm2:stop": "pm2 stop backup-gdrive",
-    "pm2:restart": "pm2 restart backup-gdrive",
-    "pm2:delete": "pm2 delete backup-gdrive",
-    "pm2:logs": "pm2 logs backup-gdrive",
+    "pm2:start": "node -e \"const config=require('./src/config').loadConfig();const schedule=config.schedule||'0 2 * * *';require('child_process').execSync('pm2 start src/backup.js --name backup-cloud --cron-restart \\\"'+schedule+'\\\"',{stdio:'inherit'})\"",
+    "pm2:stop": "pm2 stop backup-cloud",
+    "pm2:restart": "pm2 restart backup-cloud",
+    "pm2:delete": "pm2 delete backup-cloud",
+    "pm2:logs": "pm2 logs backup-cloud",
     "pm2:status": "pm2 list",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "backup",
+    "cloud-storage",
     "google-drive",
+    "aws-s3",
     "postgresql",
     "automation"
   ],
