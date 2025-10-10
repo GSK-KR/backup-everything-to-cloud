@@ -6,8 +6,9 @@
 .config
 
 # Service account credentials
-*.json
 service-account.json
+*-service-account.json
+credentials*.json
 
 # Local backup directory
 backups/
