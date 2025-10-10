@@ -33,6 +33,7 @@ async function createDatabaseDump(connectionString, outputPath) {
       `-U ${connInfo.user}`,
       `-d ${connInfo.database}`,
       '-Fc',  // Custom format (compressed)
+      '--no-sync',  // 버전 불일치 시에도 백업 계속 진행
       `-f "${outputPath}"`
     ].join(' ');
 
