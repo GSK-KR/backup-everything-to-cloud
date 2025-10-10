@@ -1,0 +1,11 @@
+# Backup Configuration File
+# List folders and PostgreSQL connection strings (one per line)
+# Folders must be absolute paths
+
+# Example folders
+/absolute/path/to/important/folder1
+/absolute/path/to/important/folder2
+
+# Example PostgreSQL connection string
+# Format: postgres://user:password@host:port/database
+postgres://myuser:mypassword@localhost:5432/mydb

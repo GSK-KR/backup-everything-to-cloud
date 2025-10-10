@@ -1,0 +1,5 @@
+{
+  "retention_days": 7,
+  "schedule": "0 2 * * *",
+  "google_drive_folder_id": "YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE"
+}
