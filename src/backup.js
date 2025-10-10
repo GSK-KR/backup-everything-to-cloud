@@ -169,13 +169,17 @@ async function runBackup() {
     // 폴더 백업과 데이터베이스 백업을 하나의 배열로 결합
     const allBackups = [...folderBackups, ...dbBackups];
 
+    // 전체 업로드 성공/실패 카운터 초기화 (모든 업로더의 누적 결과)
+    let uploadSuccessCount = 0;
+    let uploadFailCount = 0;
+
     // 각 업로더에 대해 업로드 수행
     for (const uploader of uploaders) {
       log(`\nUploading to ${uploader.getType()}...`);
 
-      // 업로드 성공/실패 카운터 초기화
-      let uploadSuccessCount = 0;
-      let uploadFailCount = 0;
+      // 현재 업로더의 성공/실패 카운터 초기화
+      let currentUploaderSuccessCount = 0;
+      let currentUploaderFailCount = 0;
 
       // 원격 경로 가져오기 (업로더 타입에 따라 다름)
       const remotePath = uploader.config?.folder_path || uploader.config?.prefix || '';
@@ -195,15 +199,17 @@ async function runBackup() {
             );
           });
 
+          currentUploaderSuccessCount++;
           uploadSuccessCount++;
 
         } catch (error) {
           log(`  Failed to upload ${backup.name} to ${uploader.getType()}: ${error.message}`, 'error');
+          currentUploaderFailCount++;
           uploadFailCount++;
         }
       }
 
-      log(`${uploader.getType()} upload summary: ${uploadSuccessCount} succeeded, ${uploadFailCount} failed`);
+      log(`${uploader.getType()} upload summary: ${currentUploaderSuccessCount} succeeded, ${currentUploaderFailCount} failed`);
     }
 
     // 모든 업로더에 업로드 성공 시에만 로컬 파일 삭제
