@@ -8,7 +8,7 @@ const path = require('path');       // 경로 처리를 위한 모듈
 const config = require('./config');                                      // 설정 파일 로더
 const { compressFolder, compressDatabaseDump } = require('./compress');  // 압축 관련 함수들
 const { createDatabaseDump } = require('./postgres');                    // PostgreSQL 백업 함수
-const GoogleDriveClient = require('./gdrive');                           // Google Drive 클라이언트 클래스
+const UploaderFactory = require('./uploaders/factory');                  // 업로더 팩토리
 const { retry, generateTimestampFilename, log } = require('./utils');   // 유틸리티 함수들
 
 /**
@@ -16,10 +16,10 @@ const { retry, generateTimestampFilename, log } = require('./utils');   // 유�
  *
  * 이 함수는 전체 백업 프로세스를 조율합니다:
  * 1. 설정 파일 로드 및 검증
- * 2. Google Drive 클라이언트 초기화
+ * 2. 업로더 초기화 (Google Drive, S3 등)
  * 3. 폴더 백업 및 압축
  * 4. PostgreSQL 데이터베이스 백업 및 압축
- * 5. Google Drive에 업로드
+ * 5. 모든 활성화된 업로더에 업로드
  * 6. 오래된 백업 파일 정리
  * 7. 결과 요약 및 종료
  *
@@ -55,18 +55,20 @@ async function runBackup() {
     log(`Retention policy: ${appConfig.retention_days} days`);
 
     // ==========================================
-    // 2단계: Google Drive 클라이언트 초기화
+    // 2단계: 업로더 초기화
     // ==========================================
-    log('Initializing Google Drive client...');
+    log('Initializing uploaders...');
 
-    // rclone 기반 Google Drive 클라이언트 인스턴스 생성
-    const gdrive = new GoogleDriveClient('gdrive'); // rclone 리모트 이름
+    // 설정에서 활성화된 업로더들 생성
+    const uploaders = UploaderFactory.createFromConfig(appConfig.uploaders);
 
-    // rclone 클라이언트 초기화 (rclone 설치 및 리모트 확인)
-    await gdrive.initialize();
+    log(`Enabled uploaders: ${uploaders.map(u => u.getType()).join(', ')}`);
 
-    // Google Drive 연결 테스트 (용량 정보 확인)
-    await gdrive.testConnection();
+    // 모든 업로더 초기화 및 연결 테스트
+    for (const uploader of uploaders) {
+      await uploader.initialize();
+      await uploader.testConnection();
+    }
 
     // ==========================================
     // 3단계: 폴더 백업 및 압축
@@ -161,66 +163,80 @@ async function runBackup() {
     }
 
     // ==========================================
-    // 5단계: Google Drive에 모든 백업 업로드
+    // 5단계: 모든 업로더에 백업 업로드
     // ==========================================
 
     // 폴더 백업과 데이터베이스 백업을 하나의 배열로 결합
     const allBackups = [...folderBackups, ...dbBackups];
 
-    // 업로드 성공/실패 카운터 초기화
-    let uploadSuccessCount = 0;
-    let uploadFailCount = 0;
+    // 각 업로더에 대해 업로드 수행
+    for (const uploader of uploaders) {
+      log(`\nUploading to ${uploader.getType()}...`);
 
-    // 모든 백업 파일을 순회하며 Google Drive에 업로드
-    for (let i = 0; i < allBackups.length; i++) {
-      const backup = allBackups[i];
-      log(`[${i + 1}/${allBackups.length}] Uploading: ${backup.name}`);
+      // 업로드 성공/실패 카운터 초기화
+      let uploadSuccessCount = 0;
+      let uploadFailCount = 0;
 
+      // 원격 경로 가져오기 (업로더 타입에 따라 다름)
+      const remotePath = uploader.config?.folder_path || uploader.config?.prefix || '';
+
+      // 모든 백업 파일을 순회하며 업로드
+      for (let i = 0; i < allBackups.length; i++) {
+        const backup = allBackups[i];
+        log(`  [${i + 1}/${allBackups.length}] ${backup.name}`);
+
+        try {
+          // 파일 업로드 (재시도 로직 포함)
+          await retry(async () => {
+            await uploader.uploadFile(
+              backup.path,     // 로컬 파일 경로
+              remotePath,      // 원격 저장소 경로
+              backup.name      // 파일명
+            );
+          });
+
+          uploadSuccessCount++;
+
+        } catch (error) {
+          log(`  Failed to upload ${backup.name} to ${uploader.getType()}: ${error.message}`, 'error');
+          uploadFailCount++;
+        }
+      }
+
+      log(`${uploader.getType()} upload summary: ${uploadSuccessCount} succeeded, ${uploadFailCount} failed`);
+    }
+
+    // 모든 업로더에 업로드 성공 시에만 로컬 파일 삭제
+    log('\nCleaning up local backup files...');
+    for (const backup of allBackups) {
       try {
-        // Google Drive에 파일 업로드 (재시도 로직 포함)
-        // 실패 시 최대 3회까지 재시도 (exponential backoff)
-        await retry(async () => {
-          await gdrive.uploadFile(
-            backup.path,                           // 로컬 파일 경로
-            appConfig.google_drive_folder_path,    // Google Drive 폴더 경로
-            backup.name                            // 업로드될 파일명
-          );
-        });
-
-        // 업로드 성공 시 카운터 증가
-        uploadSuccessCount++;
-
-        // 업로드 성공 후 로컬 백업 파일 삭제 (디스크 공간 절약)
         fs.unlinkSync(backup.path);
-        log(`Local backup removed: ${backup.name}`);
-
+        log(`Removed: ${backup.name}`);
       } catch (error) {
-        // 업로드 실패 시 에러 로그 출력
-        log(`Failed to upload ${backup.name}: ${error.message}`, 'error');
-
-        // 로컬 파일은 보존 (나중에 수동으로 업로드 가능)
-        log(`Local backup preserved at: ${backup.path}`, 'warn');
-
-        // 실패 카운터 증가
-        uploadFailCount++;
+        log(`Failed to remove ${backup.name}: ${error.message}`, 'warn');
       }
     }
 
     // ==========================================
     // 6단계: 오래된 백업 파일 정리
     // ==========================================
-    log('Cleaning up old backups from Google Drive...');
+    log('\nCleaning up old backups...');
 
-    try {
-      // retention_days 설정값보다 오래된 백업 파일 삭제
-      // 예: retention_days=7이면 7일 이전의 백업 파일 모두 삭제
-      await gdrive.cleanupOldBackups(
-        appConfig.google_drive_folder_path,  // Google Drive 폴더 경로
-        appConfig.retention_days              // 보관 기간 (일)
-      );
-    } catch (error) {
-      // 정리 실패 시 에러 로그만 출력 (치명적 오류는 아님)
-      log(`Cleanup failed: ${error.message}`, 'error');
+    for (const uploader of uploaders) {
+      try {
+        log(`Cleaning ${uploader.getType()}...`);
+
+        const remotePath = uploader.config?.folder_path || uploader.config?.prefix || '';
+        const deletedCount = await uploader.cleanupOldBackups(remotePath, appConfig.retention_days);
+
+        if (deletedCount > 0) {
+          log(`  Deleted ${deletedCount} old backup(s) from ${uploader.getType()}`);
+        } else {
+          log(`  No old backups to delete from ${uploader.getType()}`);
+        }
+      } catch (error) {
+        log(`  Cleanup failed for ${uploader.getType()}: ${error.message}`, 'error');
+      }
     }
 
     // ==========================================

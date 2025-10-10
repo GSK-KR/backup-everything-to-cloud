@@ -117,18 +117,21 @@ class Config {
    *
    * .config 파일 형식 (JSON):
    * {
-   *   "retention_days": 7,                      // 백업 보관 기간 (일)
-   *   "schedule": "0 2 * * *",                  // cron 스케줄 표현식
-   *   "google_drive_folder_path": "backups"     // Google Drive 폴더 경로 (필수)
+   *   "retention_days": 7,
+   *   "schedule": "0 2 * * *",
+   *   "uploaders": [
+   *     { "type": "gdrive", "enabled": true, "folder_path": "backups" },
+   *     { "type": "s3-sdk", "enabled": true, "bucket": "my-backups", "region": "us-east-1" }
+   *   ]
    * }
    *
    * @returns {Object} 설정 객체
    *   - retention_days: 백업 보관 기간 (기본값: 7일)
-   *   - schedule: PM2 cron 스케줄 (기본값: '0 2 * * *' = 매일 오전 2시)
-   *   - google_drive_folder_path: Google Drive 폴더 경로 (필수, 예: 'backups')
+   *   - schedule: PM2 cron 스케줄 (기본값: '0 2 * * *')
+   *   - uploaders: 업로더 설정 배열
    *
    * @throws {Error} .config 파일이 존재하지 않을 경우
-   * @throws {Error} google_drive_folder_path가 설정되지 않은 경우
+   * @throws {Error} uploaders가 설정되지 않은 경우
    * @throws {SyntaxError} JSON 파싱 실패 시
    */
   loadConfig() {
@@ -141,17 +144,19 @@ class Config {
     }
 
     // JSON 파일 읽기 및 파싱
-    // JSON.parse()는 잘못된 형식일 경우 SyntaxError 발생
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
 
     // ==========================================
     // 필수 필드 검증
     // ==========================================
 
-    // Google Drive 폴더 경로는 필수값
-    // rclone 리모트 경로 형식: 'backups', 'my-folder/backups' 등
-    if (!config.google_drive_folder_path) {
-      throw new Error('google_drive_folder_path is required in .config');
+    // uploaders 배열 검증
+    if (!config.uploaders || !Array.isArray(config.uploaders)) {
+      throw new Error('uploaders array is required in .config');
+    }
+
+    if (config.uploaders.length === 0) {
+      throw new Error('At least one uploader must be configured');
     }
 
     // ==========================================
@@ -159,12 +164,9 @@ class Config {
     // ==========================================
 
     // retention_days: 백업 보관 기간 (기본값: 7일)
-    // 이 기간보다 오래된 백업 파일은 자동 삭제됨
     config.retention_days = config.retention_days || 7;
 
     // schedule: PM2 cron 표현식 (기본값: 매일 오전 2시)
-    // cron 형식: '분 시 일 월 요일'
-    // '0 2 * * *' = 매일 오전 2시 0분
     config.schedule = config.schedule || '0 2 * * *';
 
     // 설정 객체 반환

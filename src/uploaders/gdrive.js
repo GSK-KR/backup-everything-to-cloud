@@ -2,12 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
-const { log, formatBytes } = require('./utils');
+const { log, formatBytes } = require('../utils');
+const BaseUploader = require('./base');
 
 const execAsync = promisify(exec);
 
 /**
- * Google Drive 클라이언트 (rclone 기반)
+ * Google Drive 업로더 (rclone 기반)
  *
  * Service Account 대신 rclone을 사용하여 개인 Google 계정의 My Drive에 백업
  * rclone은 OAuth 2.0을 사용하므로 개인 Gmail 계정에서도 사용 가능
@@ -16,10 +17,11 @@ const execAsync = promisify(exec);
  * - rclone 설치: brew install rclone (macOS) 또는 curl https://rclone.org/install.sh | sudo bash
  * - rclone config: rclone config로 'gdrive' 리모트 설정 필요
  */
-class GoogleDriveClient {
-  constructor(remoteName = 'gdrive') {
-    // rclone 리모트 이름 (기본값: 'gdrive')
-    this.remoteName = remoteName;
+class GDriveUploader extends BaseUploader {
+  constructor(config) {
+    super();
+    // rclone 리모트 이름 (config에서 설정 또는 기본값 'gdrive')
+    this.remoteName = config.remote_name || 'gdrive';
     // rclone이 설치되어 있는지 확인 플래그
     this.initialized = false;
   }
@@ -272,6 +274,15 @@ class GoogleDriveClient {
       throw new Error(`Google Drive connection test failed: ${error.message}`);
     }
   }
+
+  /**
+   * 업로더 타입 반환
+   *
+   * @returns {string} 'gdrive'
+   */
+  getType() {
+    return 'gdrive';
+  }
 }
 
-module.exports = GoogleDriveClient;
+module.exports = GDriveUploader;

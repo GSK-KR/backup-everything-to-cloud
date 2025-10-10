@@ -1,5 +1,29 @@
 {
   "retention_days": 7,
   "schedule": "0 2 * * *",
-  "google_drive_folder_path": "backups"
+  "uploaders": [
+    {
+      "type": "gdrive",
+      "enabled": true,
+      "remote_name": "gdrive",
+      "folder_path": "backups"
+    },
+    {
+      "type": "s3-rclone",
+      "enabled": false,
+      "remote_name": "s3",
+      "bucket": "my-backup-bucket",
+      "prefix": "backups/",
+      "region": "us-east-1",
+      "storage_class": "STANDARD_IA"
+    },
+    {
+      "type": "s3-sdk",
+      "enabled": false,
+      "bucket": "my-backup-bucket",
+      "prefix": "backups/",
+      "region": "us-east-1",
+      "storage_class": "STANDARD_IA"
+    }
+  ]
 }
