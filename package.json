@@ -5,6 +5,12 @@
   "main": "src/backup.js",
   "scripts": {
     "start": "node src/backup.js",
+    "pm2:start": "node -e \"const config=require('./.config');const schedule=config.schedule||'0 2 * * *';require('child_process').execSync('pm2 start src/backup.js --name backup-gdrive --cron-restart \\\"'+schedule+'\\\"',{stdio:'inherit'})\"",
+    "pm2:stop": "pm2 stop backup-gdrive",
+    "pm2:restart": "pm2 restart backup-gdrive",
+    "pm2:delete": "pm2 delete backup-gdrive",
+    "pm2:logs": "pm2 logs backup-gdrive",
+    "pm2:status": "pm2 list",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": ["backup", "google-drive", "postgresql", "automation"],

@@ -21,7 +21,6 @@ require('dotenv').config();
  * - 환경 변수에서 설정값 로드
  * - .backup 파일에서 백업 대상 로드 (폴더 및 데이터베이스)
  * - .config 파일에서 앱 설정 로드 (보관 기간, 스케줄 등)
- * - Google Service Account 파일 검증
  * - 로컬 백업 디렉토리 생성 및 관리
  */
 class Config {
@@ -31,7 +30,6 @@ class Config {
    * 환경 변수에서 다음 설정값을 읽어옵니다:
    * - BACKUP_FILE: 백업 대상이 정의된 파일 경로 (기본값: .backup)
    * - CONFIG_FILE: 앱 설정 파일 경로 (기본값: .config)
-   * - GOOGLE_SERVICE_ACCOUNT_PATH: Google Service Account JSON 파일 경로 (필수)
    * - LOCAL_BACKUP_DIR: 로컬 백업 임시 저장 디렉토리 (기본값: ./backups)
    */
   constructor() {
@@ -40,9 +38,6 @@ class Config {
 
     // 앱 설정 파일 경로 (환경 변수 또는 기본값)
     this.configFile = process.env.CONFIG_FILE || '.config';
-
-    // Google Service Account JSON 파일 경로 (환경 변수에서 필수로 설정)
-    this.serviceAccountPath = process.env.GOOGLE_SERVICE_ACCOUNT_PATH;
 
     // 로컬 백업 임시 저장 디렉토리 (환경 변수 또는 기본값)
     this.localBackupDir = process.env.LOCAL_BACKUP_DIR || './backups';
@@ -122,18 +117,18 @@ class Config {
    *
    * .config 파일 형식 (JSON):
    * {
-   *   "retention_days": 7,                    // 백업 보관 기간 (일)
-   *   "schedule": "0 2 * * *",                // cron 스케줄 표현식
-   *   "google_drive_folder_id": "folder_id"   // Google Drive 폴더 ID (필수)
+   *   "retention_days": 7,                      // 백업 보관 기간 (일)
+   *   "schedule": "0 2 * * *",                  // cron 스케줄 표현식
+   *   "google_drive_folder_path": "backups"     // Google Drive 폴더 경로 (필수)
    * }
    *
    * @returns {Object} 설정 객체
    *   - retention_days: 백업 보관 기간 (기본값: 7일)
    *   - schedule: PM2 cron 스케줄 (기본값: '0 2 * * *' = 매일 오전 2시)
-   *   - google_drive_folder_id: Google Drive 폴더 ID (필수)
+   *   - google_drive_folder_path: Google Drive 폴더 경로 (필수, 예: 'backups')
    *
    * @throws {Error} .config 파일이 존재하지 않을 경우
-   * @throws {Error} google_drive_folder_id가 설정되지 않은 경우
+   * @throws {Error} google_drive_folder_path가 설정되지 않은 경우
    * @throws {SyntaxError} JSON 파싱 실패 시
    */
   loadConfig() {
@@ -153,11 +148,10 @@ class Config {
     // 필수 필드 검증
     // ==========================================
 
-    // Google Drive 폴더 ID는 필수값
-    // 폴더 ID는 Google Drive URL에서 확인 가능
-    // 예: https://drive.google.com/drive/folders/[FOLDER_ID]
-    if (!config.google_drive_folder_id) {
-      throw new Error('google_drive_folder_id is required in .config');
+    // Google Drive 폴더 경로는 필수값
+    // rclone 리모트 경로 형식: 'backups', 'my-folder/backups' 등
+    if (!config.google_drive_folder_path) {
+      throw new Error('google_drive_folder_path is required in .config');
     }
 
     // ==========================================
@@ -177,35 +171,6 @@ class Config {
     return config;
   }
 
-  /**
-   * Google Service Account 파일 설정을 검증합니다
-   *
-   * Google Service Account는 Google Cloud에서 생성한 인증 파일로,
-   * Google Drive API에 접근하기 위해 필요합니다.
-   *
-   * 검증 내용:
-   * 1. GOOGLE_SERVICE_ACCOUNT_PATH 환경 변수가 설정되어 있는지
-   * 2. 해당 경로에 실제 파일이 존재하는지
-   *
-   * @returns {boolean} 검증 성공 시 true
-   *
-   * @throws {Error} GOOGLE_SERVICE_ACCOUNT_PATH 환경 변수가 설정되지 않은 경우
-   * @throws {Error} Service Account 파일이 존재하지 않는 경우
-   */
-  validateServiceAccount() {
-    // 환경 변수 설정 여부 확인
-    if (!this.serviceAccountPath) {
-      throw new Error('GOOGLE_SERVICE_ACCOUNT_PATH environment variable is required');
-    }
-
-    // 파일 존재 여부 확인
-    if (!fs.existsSync(this.serviceAccountPath)) {
-      throw new Error(`Service account file not found: ${this.serviceAccountPath}`);
-    }
-
-    // 검증 성공
-    return true;
-  }
 
   /**
    * 로컬 백업 디렉토리가 존재하는지 확인하고, 없으면 생성합니다

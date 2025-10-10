@@ -41,10 +41,7 @@ async function runBackup() {
     // ==========================================
     log('Loading configuration...');
 
-    // Google Service Account 파일 존재 여부 검증
-    config.validateServiceAccount();
-
-    // .config 파일에서 앱 설정 로드 (보관 기간, 스케줄, Google Drive 폴더 ID 등)
+    // .config 파일에서 앱 설정 로드 (보관 기간, 스케줄, Google Drive 폴더 경로 등)
     const appConfig = config.loadConfig();
 
     // .backup 파일에서 백업 대상 로드 (폴더 경로 및 데이터베이스 연결 문자열)
@@ -62,13 +59,13 @@ async function runBackup() {
     // ==========================================
     log('Initializing Google Drive client...');
 
-    // Service Account 경로로 Google Drive 클라이언트 인스턴스 생성
-    const gdrive = new GoogleDriveClient(config.serviceAccountPath);
+    // rclone 기반 Google Drive 클라이언트 인스턴스 생성
+    const gdrive = new GoogleDriveClient('gdrive'); // rclone 리모트 이름
 
-    // Google Drive API 클라이언트 초기화 (인증 설정)
+    // rclone 클라이언트 초기화 (rclone 설치 및 리모트 확인)
     await gdrive.initialize();
 
-    // Google Drive 연결 테스트 (계정 정보 확인)
+    // Google Drive 연결 테스트 (용량 정보 확인)
     await gdrive.testConnection();
 
     // ==========================================
@@ -185,7 +182,7 @@ async function runBackup() {
         await retry(async () => {
           await gdrive.uploadFile(
             backup.path,                           // 로컬 파일 경로
-            appConfig.google_drive_folder_id,      // Google Drive 폴더 ID
+            appConfig.google_drive_folder_path,    // Google Drive 폴더 경로
             backup.name                            // 업로드될 파일명
           );
         });
@@ -218,8 +215,8 @@ async function runBackup() {
       // retention_days 설정값보다 오래된 백업 파일 삭제
       // 예: retention_days=7이면 7일 이전의 백업 파일 모두 삭제
       await gdrive.cleanupOldBackups(
-        appConfig.google_drive_folder_id,  // Google Drive 폴더 ID
-        appConfig.retention_days            // 보관 기간 (일)
+        appConfig.google_drive_folder_path,  // Google Drive 폴더 경로
+        appConfig.retention_days              // 보관 기간 (일)
       );
     } catch (error) {
       // 정리 실패 시 에러 로그만 출력 (치명적 오류는 아님)
